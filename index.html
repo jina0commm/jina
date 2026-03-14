@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Climate Disturbance Field</title>
+<title>Climate Storm Field</title>
 
 <style>
 body{
@@ -15,7 +15,6 @@ canvas{
 display:block;
 }
 </style>
-
 </head>
 
 <body>
@@ -30,8 +29,8 @@ const ctx = canvas.getContext("2d")
 canvas.width = window.innerWidth
 canvas.height = window.innerHeight
 
-let co2 = 420
 let time = 0
+let co2 = 420
 
 let mouse = {
 x:canvas.width/2,
@@ -39,7 +38,7 @@ y:canvas.height/2,
 active:false
 }
 
-// fetch climate data
+// climate data
 async function getClimate(){
 
 try{
@@ -57,25 +56,23 @@ getClimate()
 setInterval(getClimate,600000)
 
 
-// particle system
+// particles = atmosphere
 let particles=[]
 
 function createParticles(){
 
 particles=[]
 
-let count = Math.floor(co2/1.8)
+let count = Math.floor(co2*1.2)
 
 for(let i=0;i<count;i++){
 
 particles.push({
-
 x:Math.random()*canvas.width,
 y:Math.random()*canvas.height,
-vx:(Math.random()-0.5)*1.2,
-vy:(Math.random()-0.5)*1.2,
-size:Math.random()*3+1
-
+vx:(Math.random()-0.5)*2,
+vy:(Math.random()-0.5)*2,
+size:Math.random()*2+1
 })
 
 }
@@ -85,25 +82,21 @@ size:Math.random()*3+1
 createParticles()
 
 
-// cursor interaction
+// cursor tracking
 window.addEventListener("mousemove",(e)=>{
-
 mouse.x = e.clientX
 mouse.y = e.clientY
 mouse.active = true
-
 })
 
 window.addEventListener("touchmove",(e)=>{
-
 mouse.x = e.touches[0].clientX
 mouse.y = e.touches[0].clientY
 mouse.active = true
-
 })
 
 
-// draw climate background
+// background climate heat
 function drawClimate(){
 
 let heat = co2/500
@@ -130,33 +123,29 @@ ctx.fillRect(0,0,canvas.width,canvas.height)
 }
 
 
-// draw cooling ripple
-function drawRipple(){
+// storm waves
+function drawHeatWaves(){
 
-if(!mouse.active) return
-
-let rippleSize = 120 + Math.sin(time*4)*20
-
-let grad = ctx.createRadialGradient(
-
-mouse.x,
-mouse.y,
-0,
-
-mouse.x,
-mouse.y,
-rippleSize
-
-)
-
-grad.addColorStop(0,"rgba(120,200,255,0.7)")
-grad.addColorStop(1,"rgba(0,0,255,0)")
-
-ctx.fillStyle = grad
+for(let i=0;i<6;i++){
 
 ctx.beginPath()
-ctx.arc(mouse.x,mouse.y,rippleSize,0,Math.PI*2)
-ctx.fill()
+
+for(let x=0;x<canvas.width;x+=20){
+
+let y =
+canvas.height/2 +
+Math.sin(x*0.01 + time*2 + i)*80 +
+i*40
+
+ctx.lineTo(x,y)
+
+}
+
+ctx.strokeStyle="rgba(255,255,255,0.05)"
+ctx.lineWidth=2
+ctx.stroke()
+
+}
 
 }
 
@@ -166,23 +155,27 @@ function updateParticles(){
 
 particles.forEach(p=>{
 
-// turbulence
-p.x += p.vx + Math.sin(time+p.y*0.02)*0.5
-p.y += p.vy + Math.cos(time+p.x*0.02)*0.5
-
-// cursor interaction
 let dx = p.x - mouse.x
 let dy = p.y - mouse.y
+
 let dist = Math.sqrt(dx*dx+dy*dy)
 
-if(dist < 150){
+// vortex interaction
+if(dist < 200){
 
-let force = (150-dist)/150
+let force = (200-dist)/200
 
-p.x += dx*force*2
-p.y += dy*force*2
+p.vx += dx*force*0.02
+p.vy += dy*force*0.02
 
 }
+
+// storm turbulence
+p.vx += Math.sin(time + p.y*0.01)*0.05
+p.vy += Math.cos(time + p.x*0.01)*0.05
+
+p.x += p.vx
+p.y += p.vy
 
 // wrap edges
 if(p.x<0)p.x=canvas.width
@@ -192,10 +185,41 @@ if(p.y>canvas.height)p.y=0
 
 ctx.beginPath()
 ctx.arc(p.x,p.y,p.size,0,Math.PI*2)
-ctx.fillStyle="rgba(255,255,255,0.7)"
+ctx.fillStyle="rgba(255,255,255,0.6)"
 ctx.fill()
 
 })
+
+}
+
+
+// cooling aura
+function drawCursor(){
+
+if(!mouse.active) return
+
+let size = 150 + Math.sin(time*4)*30
+
+let grad = ctx.createRadialGradient(
+
+mouse.x,
+mouse.y,
+0,
+
+mouse.x,
+mouse.y,
+size
+
+)
+
+grad.addColorStop(0,"rgba(120,220,255,0.9)")
+grad.addColorStop(1,"rgba(0,80,255,0)")
+
+ctx.fillStyle = grad
+
+ctx.beginPath()
+ctx.arc(mouse.x,mouse.y,size,0,Math.PI*2)
+ctx.fill()
 
 }
 
@@ -209,8 +233,9 @@ ctx.fillStyle="rgba(0,0,0,0.15)"
 ctx.fillRect(0,0,canvas.width,canvas.height)
 
 drawClimate()
+drawHeatWaves()
 updateParticles()
-drawRipple()
+drawCursor()
 
 requestAnimationFrame(animate)
 
