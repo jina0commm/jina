@@ -59,7 +59,7 @@ getClimate()
 setInterval(getClimate,600000)
 
 
-// fluid points (calmer)
+// fluid sources (kept small for calmer motion)
 let points=[]
 
 for(let i=0;i<12;i++){
@@ -70,7 +70,7 @@ x:Math.random()*canvas.width,
 y:Math.random()*canvas.height,
 vx:(Math.random()-0.5)*0.3,
 vy:(Math.random()-0.5)*0.3,
-size:320 + Math.random()*180
+size:300 + Math.random()*200
 
 })
 
@@ -87,7 +87,7 @@ mouse.active = true
 })
 
 
-// climate color palette
+// climate colour system
 function getColors(){
 
 let heat = (co2 - 350) / 120
@@ -96,7 +96,186 @@ if(heat > 1) heat = 1
 
 let red = Math.floor(255 * heat)
 let orange = Math.floor(120 + 80 * heat)
-let blue = Math.floor(20
+let blue = Math.floor(200 * (1 - heat))
+
+return {
+
+hot:`rgba(${red},${orange},40,0.9)`,
+warm:`rgba(255,100,40,0.7)`,
+cool:`rgba(20,80,${blue},0.8)`
+
+}
+
+}
 
 
+// draw fluid gradients
+function drawFluid(){
+
+let colors = getColors()
+
+points.forEach(p=>{
+
+// slow organic drift
+p.vx += Math.sin(time*0.2 + p.y*0.005)*0.02
+p.vy += Math.cos(time*0.2 + p.x*0.005)*0.02
+
+p.x += p.vx
+p.y += p.vy
+
+
+// cursor cooling interaction
+let dx = mouse.x - p.x
+let dy = mouse.y - p.y
+
+let dist = Math.sqrt(dx*dx + dy*dy)
+
+if(dist < 300){
+
+let force = (300 - dist)/300
+
+p.x -= dx * force * 0.05
+p.y -= dy * force * 0.05
+
+}
+
+
+// wrap edges
+if(p.x<0)p.x=canvas.width
+if(p.x>canvas.width)p.x=0
+if(p.y<0)p.y=canvas.height
+if(p.y>canvas.height)p.y=0
+
+
+// layered gradient blob
+let grad = ctx.createRadialGradient(
+
+p.x,
+p.y,
+0,
+
+p.x,
+p.y,
+p.size
+
+)
+
+grad.addColorStop(0,colors.hot)
+grad.addColorStop(0.4,colors.warm)
+grad.addColorStop(1,colors.cool)
+
+ctx.globalCompositeOperation="lighter"
+
+ctx.fillStyle = grad
+
+ctx.beginPath()
+ctx.arc(p.x,p.y,p.size,0,Math.PI*2)
+ctx.fill()
+
+})
+
+ctx.globalCompositeOperation="source-over"
+
+}
+
+
+// subtle atmosphere particles
+let particles=[]
+
+for(let i=0;i<40;i++){
+
+particles.push({
+
+x:Math.random()*canvas.width,
+y:Math.random()*canvas.height,
+vx:(Math.random()-0.5)*0.1,
+vy:(Math.random()-0.5)*0.1
+
+})
+
+}
+
+function drawParticles(){
+
+particles.forEach(p=>{
+
+p.x += p.vx
+p.y += p.vy
+
+if(p.x<0)p.x=canvas.width
+if(p.x>canvas.width)p.x=0
+if(p.y<0)p.y=canvas.height
+if(p.y>canvas.height)p.y=0
+
+ctx.beginPath()
+ctx.arc(p.x,p.y,1.5,0,Math.PI*2)
+ctx.fillStyle="rgba(255,255,255,0.15)"
+ctx.fill()
+
+})
+
+}
+
+
+// visible cooling field
+function drawCursor(){
+
+if(!mouse.active) return
+
+let size = 220
+
+let grad = ctx.createRadialGradient(
+
+mouse.x,
+mouse.y,
+0,
+
+mouse.x,
+mouse.y,
+size
+
+)
+
+grad.addColorStop(0,"rgba(120,220,255,0.7)")
+grad.addColorStop(1,"rgba(0,120,255,0)")
+
+ctx.fillStyle = grad
+
+ctx.beginPath()
+ctx.arc(mouse.x,mouse.y,size,0,Math.PI*2)
+ctx.fill()
+
+}
+
+
+// animation loop
+function animate(){
+
+time += 0.01
+
+ctx.fillStyle="rgba(0,0,0,0.05)"
+ctx.fillRect(0,0,canvas.width,canvas.height)
+
+drawFluid()
+drawParticles()
+drawCursor()
+
+requestAnimationFrame(animate)
+
+}
+
+animate()
+
+
+window.addEventListener("resize",()=>{
+
+canvas.width = window.innerWidth
+canvas.height = window.innerHeight
+
+})
+
+</script>
+
+</body>
+</html>
 
