@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Climate Breathing Field</title>
+<title>Liquid Climate Field</title>
 
 <style>
 body{
@@ -15,6 +15,7 @@ canvas{
 display:block;
 }
 </style>
+
 </head>
 
 <body>
@@ -38,7 +39,8 @@ y:canvas.height/2,
 active:false
 }
 
-// fetch real CO2 data
+
+// fetch climate data
 async function getClimate(){
 
 try{
@@ -56,32 +58,22 @@ getClimate()
 setInterval(getClimate,600000)
 
 
-// particles (atmosphere)
-let particles=[]
+// liquid blobs
+let blobs = []
 
-function createParticles(){
+for(let i=0;i<5;i++){
 
-particles=[]
-
-let count = Math.floor(co2/3)
-
-for(let i=0;i<count;i++){
-
-particles.push({
+blobs.push({
 
 x:Math.random()*canvas.width,
 y:Math.random()*canvas.height,
-vx:(Math.random()-0.5)*0.4,
-vy:(Math.random()-0.5)*0.4,
-size:Math.random()*2+1
+vx:(Math.random()-0.5)*0.3,
+vy:(Math.random()-0.5)*0.3,
+size:400 + Math.random()*300
 
 })
 
 }
-
-}
-
-createParticles()
 
 
 // cursor interaction
@@ -94,68 +86,118 @@ mouse.active = true
 })
 
 
-// smooth climate gradient
-function drawGradient(){
+// color palette from climate heat
+function getColors(){
 
 let heat = co2/500
 
 let warm = Math.floor(255*heat)
 let cool = Math.floor(255*(1-heat))
 
-let grad = ctx.createRadialGradient(
+return {
 
-canvas.width/2 + Math.sin(time*0.3)*200,
-canvas.height/2 + Math.cos(time*0.3)*200,
-200,
+warm:`rgb(${warm},80,20)`,
+cool:`rgb(20,80,${cool})`,
+accent:`rgb(120,200,255)`
 
-canvas.width/2,
-canvas.height/2,
-canvas.width
-
-)
-
-grad.addColorStop(0,`rgb(${warm},80,0)`)
-grad.addColorStop(1,`rgb(0,0,${cool})`)
-
-ctx.fillStyle = grad
-ctx.fillRect(0,0,canvas.width,canvas.height)
+}
 
 }
 
 
-// particles reacting to cursor
-function updateParticles(){
+// draw liquid gradient blobs
+function drawBlobs(){
 
-particles.forEach(p=>{
+let colors = getColors()
 
-// subtle drift
-p.x += p.vx + Math.sin(time+p.y*0.01)*0.2
-p.y += p.vy + Math.cos(time+p.x*0.01)*0.2
+blobs.forEach(b=>{
 
-// cursor cooling force
-let dx = mouse.x - p.x
-let dy = mouse.y - p.y
+// movement
+b.x += b.vx + Math.sin(time*0.3 + b.y*0.002)
+b.y += b.vy + Math.cos(time*0.3 + b.x*0.002)
 
-let dist = Math.sqrt(dx*dx + dy*dy)
+// cursor cooling influence
+let dx = mouse.x - b.x
+let dy = mouse.y - b.y
+let dist = Math.sqrt(dx*dx+dy*dy)
 
-if(dist < 200){
+if(dist < 300){
 
-let force = (200 - dist)/200
+let force = (300-dist)/300
 
-p.x -= dx * force * 0.05
-p.y -= dy * force * 0.05
+b.x -= dx*force*0.02
+b.y -= dy*force*0.02
 
 }
 
 // wrap edges
+if(b.x<0)b.x=canvas.width
+if(b.x>canvas.width)b.x=0
+if(b.y<0)b.y=canvas.height
+if(b.y>canvas.height)b.y=0
+
+
+let grad = ctx.createRadialGradient(
+
+b.x,
+b.y,
+0,
+
+b.x,
+b.y,
+b.size
+
+)
+
+grad.addColorStop(0,colors.warm)
+grad.addColorStop(1,colors.cool)
+
+ctx.globalCompositeOperation = "lighter"
+
+ctx.fillStyle = grad
+
+ctx.beginPath()
+ctx.arc(b.x,b.y,b.size,0,Math.PI*2)
+ctx.fill()
+
+})
+
+ctx.globalCompositeOperation = "source-over"
+
+}
+
+
+// subtle atmosphere particles
+let particles=[]
+
+for(let i=0;i<120;i++){
+
+particles.push({
+
+x:Math.random()*canvas.width,
+y:Math.random()*canvas.height,
+vx:(Math.random()-0.5)*0.2,
+vy:(Math.random()-0.5)*0.2
+
+})
+
+}
+
+function drawParticles(){
+
+particles.forEach(p=>{
+
+p.x += p.vx
+p.y += p.vy
+
 if(p.x<0)p.x=canvas.width
 if(p.x>canvas.width)p.x=0
 if(p.y<0)p.y=canvas.height
 if(p.y>canvas.height)p.y=0
 
 ctx.beginPath()
-ctx.arc(p.x,p.y,p.size,0,Math.PI*2)
-ctx.fillStyle="rgba(255,255,255,0.5)"
+ctx.arc(p.x,p.y,1.5,0,Math.PI*2)
+ctx.fillStyle="rgba(255,255,255,0.25)"
 ctx.fill()
 
 })
@@ -163,12 +205,12 @@ ctx.fill()
 }
 
 
-// visible cooling aura
+// cooling aura
 function drawCursor(){
 
 if(!mouse.active) return
 
-let radius = 140 + Math.sin(time*3)*10
+let size = 180 + Math.sin(time*3)*10
 
 let grad = ctx.createRadialGradient(
 
@@ -178,17 +220,17 @@ mouse.y,
 
 mouse.x,
 mouse.y,
-radius
+size
 
 )
 
-grad.addColorStop(0,"rgba(140,220,255,0.8)")
+grad.addColorStop(0,"rgba(120,200,255,0.6)")
 grad.addColorStop(1,"rgba(0,120,255,0)")
 
 ctx.fillStyle = grad
 
 ctx.beginPath()
-ctx.arc(mouse.x,mouse.y,radius,0,Math.PI*2)
+ctx.arc(mouse.x,mouse.y,size,0,Math.PI*2)
 ctx.fill()
 
 }
@@ -199,11 +241,11 @@ function animate(){
 
 time += 0.01
 
-ctx.fillStyle="rgba(0,0,0,0.1)"
+ctx.fillStyle="rgba(0,0,0,0.08)"
 ctx.fillRect(0,0,canvas.width,canvas.height)
 
-drawGradient()
-updateParticles()
+drawBlobs()
+drawParticles()
 drawCursor()
 
 requestAnimationFrame(animate)
@@ -212,11 +254,11 @@ requestAnimationFrame(animate)
 
 animate()
 
+
 window.addEventListener("resize",()=>{
 
 canvas.width = window.innerWidth
 canvas.height = window.innerHeight
-createParticles()
 
 })
 
@@ -224,3 +266,4 @@ createParticles()
 
 </body>
 </html>
+
