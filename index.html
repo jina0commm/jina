@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Climate Gradient</title>
+<style>
+html,body{
+margin:0;
+padding:0;
+overflow:hidden;
+background:black;
+}
+
+canvas{
+display:block;
+}
+</style>
+</head>
+
+<body>
+<canvas id="canvas"></canvas>
+
+<script>
+
+const canvas = document.getElementById("canvas")
+const ctx = canvas.getContext("2d")
+
+canvas.width = window.innerWidth
+canvas.height = window.innerHeight
+
+let tempAnomaly = 1.0
+
+// fetch NASA temperature anomaly
+async function fetchTemp(){
+
+try{
+
+const res = await fetch("https://global-warming.org/api/temperature-api")
+
+const data = await res.json()
+
+const latest = data.result[data.result.length-1]
+
+tempAnomaly = parseFloat(latest.station)
+
+}catch(e){
+
+console.log("data fetch error", e)
+
+}
+
+}
+
+fetchTemp()
+
+setInterval(fetchTemp, 600000)
+
+function mapTempToColor(t){
+
+if(t < 0) return ["#0033ff","#00ffff"]
+
+if(t < 0.5) return ["#00c8ff","#a8ffff"]
+
+if(t < 1) return ["#ffe680","#ff9b42"]
+
+if(t < 1.5) return ["#ff6a3d","#ff3b1f"]
+
+return ["#ff0040","#7a001f"]
+
+}
+
+let time = 0
+
+function draw(){
+
+time += 0.002
+
+const colors = mapTempToColor(tempAnomaly)
+
+const grad = ctx.createLinearGradient(
+0,
+Math.sin(time)*canvas.height,
+canvas.width,
+canvas.height
+)
+
+grad.addColorStop(0, colors[0])
+grad.addColorStop(1, colors[1])
+
+ctx.fillStyle = grad
+ctx.fillRect(0,0,canvas.width,canvas.height)
+
+requestAnimationFrame(draw)
+
+}
+
+draw()
+
+window.addEventListener("resize",()=>{
+
+canvas.width = window.innerWidth
+canvas.height = window.innerHeight
+
+})
+
+</script>
+</body>
+</html>
