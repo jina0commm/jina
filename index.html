@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Liquid Climate Field</title>
+<title>Liquid Climate Flow</title>
 
 <style>
 body{
@@ -13,9 +13,9 @@ background:black;
 
 canvas{
 display:block;
+filter:blur(20px) contrast(120%);
 }
 </style>
-
 </head>
 
 <body>
@@ -39,7 +39,6 @@ y:canvas.height/2,
 active:false
 }
 
-
 // fetch climate data
 async function getClimate(){
 
@@ -58,25 +57,25 @@ getClimate()
 setInterval(getClimate,600000)
 
 
-// liquid blobs
-let blobs = []
+// fluid points
+let points = []
 
-for(let i=0;i<5;i++){
+for(let i=0;i<25;i++){
 
-blobs.push({
+points.push({
 
 x:Math.random()*canvas.width,
 y:Math.random()*canvas.height,
-vx:(Math.random()-0.5)*0.3,
-vy:(Math.random()-0.5)*0.3,
-size:400 + Math.random()*300
+vx:(Math.random()-0.5)*0.6,
+vy:(Math.random()-0.5)*0.6,
+size:200 + Math.random()*200
 
 })
 
 }
 
 
-// cursor interaction
+// cursor
 window.addEventListener("mousemove",(e)=>{
 
 mouse.x = e.clientX
@@ -86,91 +85,94 @@ mouse.active = true
 })
 
 
-// color palette from climate heat
+// climate colors
 function getColors(){
 
 let heat = co2/500
 
-let warm = Math.floor(255*heat)
-let cool = Math.floor(255*(1-heat))
+let r = Math.floor(255*heat)
+let b = Math.floor(255*(1-heat))
 
 return {
 
-warm:`rgb(${warm},80,20)`,
-cool:`rgb(20,80,${cool})`,
-accent:`rgb(120,200,255)`
+warm:`rgba(${r},80,40,0.9)`,
+cool:`rgba(40,120,${b},0.9)`
 
 }
 
 }
 
 
-// draw liquid gradient blobs
-function drawBlobs(){
+// draw fluid blobs
+function drawFluid(){
 
 let colors = getColors()
 
-blobs.forEach(b=>{
+points.forEach(p=>{
 
-// movement
-b.x += b.vx + Math.sin(time*0.3 + b.y*0.002)
-b.y += b.vy + Math.cos(time*0.3 + b.x*0.002)
+p.vx += Math.sin(time + p.y*0.01)*0.05
+p.vy += Math.cos(time + p.x*0.01)*0.05
 
-// cursor cooling influence
-let dx = mouse.x - b.x
-let dy = mouse.y - b.y
-let dist = Math.sqrt(dx*dx+dy*dy)
+p.x += p.vx
+p.y += p.vy
 
-if(dist < 300){
 
-let force = (300-dist)/300
+// cursor cooling current
+let dx = mouse.x - p.x
+let dy = mouse.y - p.y
+let dist = Math.sqrt(dx*dx + dy*dy)
 
-b.x -= dx*force*0.02
-b.y -= dy*force*0.02
+if(dist < 250){
+
+let force = (250 - dist)/250
+
+p.x -= dx * force * 0.03
+p.y -= dy * force * 0.03
 
 }
 
+
 // wrap edges
-if(b.x<0)b.x=canvas.width
-if(b.x>canvas.width)b.x=0
-if(b.y<0)b.y=canvas.height
-if(b.y>canvas.height)b.y=0
+if(p.x<0)p.x=canvas.width
+if(p.x>canvas.width)p.x=0
+if(p.y<0)p.y=canvas.height
+if(p.y>canvas.height)p.y=0
 
 
 let grad = ctx.createRadialGradient(
 
-b.x,
-b.y,
+p.x,
+p.y,
 0,
 
-b.x,
-b.y,
-b.size
+p.x,
+p.y,
+p.size
 
 )
 
 grad.addColorStop(0,colors.warm)
 grad.addColorStop(1,colors.cool)
 
-ctx.globalCompositeOperation = "lighter"
+ctx.globalCompositeOperation="lighter"
 
 ctx.fillStyle = grad
 
 ctx.beginPath()
-ctx.arc(b.x,b.y,b.size,0,Math.PI*2)
+ctx.arc(p.x,p.y,p.size,0,Math.PI*2)
 ctx.fill()
 
 })
 
-ctx.globalCompositeOperation = "source-over"
+ctx.globalCompositeOperation="source-over"
 
 }
 
 
-// subtle atmosphere particles
+// subtle particles
 let particles=[]
 
-for(let i=0;i<120;i++){
+for(let i=0;i<80;i++){
 
 particles.push({
 
@@ -197,7 +199,7 @@ if(p.y>canvas.height)p.y=0
 
 ctx.beginPath()
 ctx.arc(p.x,p.y,1.5,0,Math.PI*2)
-ctx.fillStyle="rgba(255,255,255,0.25)"
+ctx.fillStyle="rgba(255,255,255,0.2)"
 ctx.fill()
 
 })
@@ -205,12 +207,12 @@ ctx.fill()
 }
 
 
-// cooling aura
+// cursor aura
 function drawCursor(){
 
 if(!mouse.active) return
 
-let size = 180 + Math.sin(time*3)*10
+let size = 200 + Math.sin(time*2)*10
 
 let grad = ctx.createRadialGradient(
 
@@ -224,7 +226,7 @@ size
 
 )
 
-grad.addColorStop(0,"rgba(120,200,255,0.6)")
+grad.addColorStop(0,"rgba(120,220,255,0.5)")
 grad.addColorStop(1,"rgba(0,120,255,0)")
 
 ctx.fillStyle = grad
@@ -241,10 +243,10 @@ function animate(){
 
 time += 0.01
 
-ctx.fillStyle="rgba(0,0,0,0.08)"
+ctx.fillStyle="rgba(0,0,0,0.06)"
 ctx.fillRect(0,0,canvas.width,canvas.height)
 
-drawBlobs()
+drawFluid()
 drawParticles()
 drawCursor()
 
@@ -266,4 +268,5 @@ canvas.height = window.innerHeight
 
 </body>
 </html>
+
 
