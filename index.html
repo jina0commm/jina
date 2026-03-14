@@ -1,174 +1,248 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Climate Interaction</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Climate Interaction: Heat & Mitigation</title>
 <style>
-body{
-margin:0;
-overflow:hidden;
-background:#0a0f14;
-}
+    @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap');
 
-canvas{
-display:block;
-}
+    body {
+        margin: 0;
+        overflow: hidden;
+        background: #050000; /* Deep dark background */
+        font-family: 'Rajdhani', sans-serif;
+        color: white;
+        user-select: none;
+    }
+
+    canvas {
+        display: block;
+    }
+
+    #ui {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        pointer-events: none;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+    }
+
+    h1 {
+        margin: 0 0 5px 0;
+        font-size: 2rem;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: #ff4a4a;
+    }
+
+    .stat {
+        font-size: 1.2rem;
+        margin-bottom: 5px;
+        color: #ccc;
+    }
+
+    .value {
+        font-weight: bold;
+        color: #fff;
+    }
+
+    #impact-value {
+        color: #00e5ff; /* Cool cyan */
+    }
+
+    #instructions {
+        position: absolute;
+        bottom: 20px;
+        width: 100%;
+        text-align: center;
+        color: rgba(255,255,255,0.5);
+        pointer-events: none;
+        font-size: 1.1rem;
+        letter-spacing: 1px;
+    }
 </style>
-
 </head>
-
 <body>
+
+<div id="ui">
+    <h1>Global Heat Status</h1>
+    <div class="stat">Current CO2 Level: <span class="value" id="co2-value">Loading...</span> ppm</div>
+    <div class="stat">Mitigation Impact: <span class="value" id="impact-value">0</span></div>
+</div>
+
+<div id="instructions">Move cursor to cool locally. Click and hold to trigger active mitigation.</div>
 
 <canvas id="c"></canvas>
 
 <script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
 
-const canvas = document.getElementById("c")
-const ctx = canvas.getContext("2d")
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-canvas.width = window.innerWidth
-canvas.height = window.innerHeight
+// State variables
+let co2 = 425; // Default fallback
+let impactScore = 0;
+let isMitigating = false;
 
-let co2 = 420
+// UI Elements
+const co2El = document.getElementById("co2-value");
+const impactEl = document.getElementById("impact-value");
 
-// fetch climate data
-async function getClimate(){
+// Fetch climate data
+async function getClimate() {
+    try {
+        let res = await fetch("https://global-warming.org/api/co2-api");
+        let data = await res.json();
+        co2 = parseFloat(data.co2[data.co2.length-1].trend);
+        co2El.innerText = co2.toFixed(2);
+    } catch(e) {
+        co2El.innerText = co2 + " (Fallback)";
+    }
+}
+getClimate();
+setInterval(getClimate, 600000);
 
-try{
+// Mouse interaction
+let mouse = { x: canvas.width/2, y: canvas.height/2 };
 
-let res = await fetch("https://global-warming.org/api/co2-api")
-let data = await res.json()
+window.addEventListener("mousemove", (e) => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+});
 
-co2 = parseFloat(data.co2[data.co2.length-1].trend)
+window.addEventListener("mousedown", () => isMitigating = true);
+window.addEventListener("mouseup", () => isMitigating = false);
+window.addEventListener("touchstart", (e) => {
+    isMitigating = true;
+    mouse.x = e.touches[0].clientX;
+    mouse.y = e.touches[0].clientY;
+});
+window.addEventListener("touchend", () => isMitigating = false);
+window.addEventListener("touchmove", (e) => {
+    mouse.x = e.touches[0].clientX;
+    mouse.y = e.touches[0].clientY;
+});
 
-}catch(e){}
+// Particle system representing CO2 / Heat
+let particles = [];
+const numParticles = 150;
 
+for(let i = 0; i < numParticles; i++) {
+    particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2,
+        baseRadius: 15 + Math.random() * 25,
+        radius: 0,
+        temp: 1 // 1 is hot (red), 0 is cool (blue)
+    });
 }
 
-getClimate()
-setInterval(getClimate,600000)
+function animate() {
+    // Dark red trailing effect
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "rgba(10, 2, 2, 0.3)"; 
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    ctx.globalCompositeOperation = "lighter";
 
-// mouse
-let mouse = {
-x:canvas.width/2,
-y:canvas.height/2
+    // Determine cooling radius based on interaction
+    let coolingRadius = isMitigating ? 350 : 150;
+
+    particles.forEach(p => {
+        // Movement
+        p.x += p.vx;
+        p.y += p.vy;
+
+        // Interaction with cursor
+        let dx = p.x - mouse.x;
+        let dy = p.y - mouse.y;
+        let dist = Math.sqrt(dx*dx + dy*dy);
+
+        if (dist < coolingRadius) {
+            // Cool down particle
+            p.temp -= 0.05;
+            if (p.temp < 0) p.temp = 0;
+            
+            // Push away gently if mitigating actively
+            if (isMitigating) {
+                let force = (coolingRadius - dist) / coolingRadius;
+                p.vx += dx * force * 0.005;
+                p.vy += dy * force * 0.005;
+                impactScore += 0.1; // Increase score
+            }
+        } else {
+            // Heat back up slowly
+            p.temp += 0.01;
+            if (p.temp > 1) p.temp = 1;
+        }
+
+        // Natural random jitter based on heat (hotter = more chaotic)
+        p.vx += (Math.random() - 0.5) * p.temp * 0.5;
+        p.vy += (Math.random() - 0.5) * p.temp * 0.5;
+
+        // Friction / Damping
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+
+        // Wrap screen
+        if(p.x < -50) p.x = canvas.width + 50;
+        if(p.x > canvas.width + 50) p.x = -50;
+        if(p.y < -50) p.y = canvas.height + 50;
+        if(p.y > canvas.height + 50) p.y = -50;
+
+        // Size changes based on temp
+        p.radius = p.baseRadius * (0.5 + p.temp * 0.5);
+
+        // Color blending: Red (Hot) to Cyan (Cool)
+        let r = Math.floor(255 * p.temp);
+        let g = Math.floor(50 * p.temp + 200 * (1 - p.temp));
+        let b = Math.floor(20 * p.temp + 255 * (1 - p.temp));
+
+        // Draw Particle Glow
+        let grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius);
+        grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.8)`);
+        grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+    });
+
+    // Draw Cursor Cooling Aura
+    ctx.globalCompositeOperation = "source-over";
+    let auraGrad = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, coolingRadius);
+    
+    if (isMitigating) {
+        auraGrad.addColorStop(0, "rgba(0, 255, 255, 0.4)");
+        auraGrad.addColorStop(1, "rgba(0, 100, 255, 0)");
+    } else {
+        auraGrad.addColorStop(0, "rgba(120, 200, 255, 0.15)");
+        auraGrad.addColorStop(1, "rgba(120, 200, 255, 0)");
+    }
+
+    ctx.beginPath();
+    ctx.arc(mouse.x, mouse.y, coolingRadius, 0, Math.PI * 2);
+    ctx.fillStyle = auraGrad;
+    ctx.fill();
+
+    // Update UI Score
+    impactEl.innerText = Math.floor(impactScore);
+
+    requestAnimationFrame(animate);
 }
 
-window.addEventListener("mousemove",(e)=>{
+animate();
 
-mouse.x = e.clientX
-mouse.y = e.clientY
-
-})
-
-
-// blobs
-let blobs = []
-
-for(let i=0;i<10;i++){
-
-blobs.push({
-
-x:Math.random()*canvas.width,
-y:Math.random()*canvas.height,
-vx:(Math.random()-0.5)*1,
-vy:(Math.random()-0.5)*1,
-r:80+Math.random()*40
-
-})
-
-}
-
-
-// heat color based on CO2
-function heatColor(){
-
-let heat = (co2-350)/120
-if(heat<0)heat=0
-if(heat>1)heat=1
-
-let r = 200 + heat*55
-let g = 50 + heat*40
-
-return `rgb(${r},${g},30)`
-
-}
-
-
-// animation
-function animate(){
-
-ctx.fillStyle="rgba(10,15,20,0.2)"
-ctx.fillRect(0,0,canvas.width,canvas.height)
-
-blobs.forEach(b=>{
-
-// movement
-b.x += b.vx
-b.y += b.vy
-
-
-// cursor repulsion
-let dx = b.x - mouse.x
-let dy = b.y - mouse.y
-let dist = Math.sqrt(dx*dx + dy*dy)
-
-if(dist < 200){
-
-let force = (200-dist)/200
-
-b.vx += dx*force*0.02
-b.vy += dy*force*0.02
-
-}
-
-
-// slow damping
-b.vx *= 0.98
-b.vy *= 0.98
-
-
-// wrap screen
-if(b.x<0)b.x=canvas.width
-if(b.x>canvas.width)b.x=0
-if(b.y<0)b.y=canvas.height
-if(b.y>canvas.height)b.y=0
-
-
-// draw blob
-ctx.beginPath()
-ctx.arc(b.x,b.y,b.r,0,Math.PI*2)
-
-ctx.fillStyle = heatColor()
-ctx.fill()
-
-})
-
-
-// draw cursor indicator
-ctx.beginPath()
-ctx.arc(mouse.x,mouse.y,200,0,Math.PI*2)
-ctx.strokeStyle="rgba(120,200,255,0.4)"
-ctx.lineWidth=2
-ctx.stroke()
-
-requestAnimationFrame(animate)
-
-}
-
-animate()
-
-
-window.addEventListener("resize",()=>{
-
-canvas.width = window.innerWidth
-canvas.height = window.innerHeight
-
-})
-
+window.addEventListener("resize", () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
 </script>
-
 </body>
 </html>
