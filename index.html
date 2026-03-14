@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Climate Gradient</title>
+<title>Climate Energy Field</title>
+
 <style>
 html,body{
 margin:0;
@@ -15,9 +16,11 @@ canvas{
 display:block;
 }
 </style>
+
 </head>
 
 <body>
+
 <canvas id="canvas"></canvas>
 
 <script>
@@ -28,73 +31,122 @@ const ctx = canvas.getContext("2d")
 canvas.width = window.innerWidth
 canvas.height = window.innerHeight
 
-let tempAnomaly = 1.0
-
-// fetch NASA temperature anomaly
-async function fetchTemp(){
-
-try{
-
-const res = await fetch("https://global-warming.org/api/temperature-api")
-
-const data = await res.json()
-
-const latest = data.result[data.result.length-1]
-
-tempAnomaly = parseFloat(latest.station)
-
-}catch(e){
-
-console.log("data fetch error", e)
-
-}
-
-}
-
-fetchTemp()
-
-setInterval(fetchTemp, 600000)
-
-function mapTempToColor(t){
-
-if(t < 0) return ["#0033ff","#00ffff"]
-
-if(t < 0.5) return ["#00c8ff","#a8ffff"]
-
-if(t < 1) return ["#ffe680","#ff9b42"]
-
-if(t < 1.5) return ["#ff6a3d","#ff3b1f"]
-
-return ["#ff0040","#7a001f"]
-
-}
-
+let temp = 1.1
 let time = 0
 
-function draw(){
+// simple particle system (CO2 atmosphere)
+const particles = []
 
-time += 0.002
+for(let i=0;i<120;i++){
+particles.push({
+x:Math.random()*canvas.width,
+y:Math.random()*canvas.height,
+vx:(Math.random()-0.5)*0.3,
+vy:(Math.random()-0.5)*0.3,
+size:Math.random()*3+1
+})
+}
 
-const colors = mapTempToColor(tempAnomaly)
+// temperature → color palette
+function climateColors(t){
 
-const grad = ctx.createLinearGradient(
-0,
-Math.sin(time)*canvas.height,
-canvas.width,
-canvas.height
+if(t < 0.5) return ["#003cff","#00d4ff"]
+
+if(t < 1) return ["#00ffa2","#f7ff4a"]
+
+if(t < 1.5) return ["#ff9b00","#ff2a00"]
+
+return ["#ff0033","#5c0000"]
+
+}
+
+// simulate temperature fluctuation
+function updateTemp(){
+temp = 0.8 + Math.sin(time*0.2)*0.6
+}
+
+function drawGradient(){
+
+const colors = climateColors(temp)
+
+const grad = ctx.createRadialGradient(
+canvas.width/2,
+canvas.height/2,
+200,
+canvas.width/2,
+canvas.height/2,
+canvas.width
 )
 
-grad.addColorStop(0, colors[0])
-grad.addColorStop(1, colors[1])
+grad.addColorStop(0,colors[0])
+grad.addColorStop(1,colors[1])
 
 ctx.fillStyle = grad
 ctx.fillRect(0,0,canvas.width,canvas.height)
 
-requestAnimationFrame(draw)
+}
+
+function drawHeatWaves(){
+
+for(let i=0;i<8;i++){
+
+ctx.beginPath()
+
+for(let x=0;x<canvas.width;x+=20){
+
+let y =
+canvas.height/2 +
+Math.sin(x*0.01 + time + i)*80 +
+i*30
+
+ctx.lineTo(x,y)
 
 }
 
-draw()
+ctx.strokeStyle="rgba(255,255,255,0.05)"
+ctx.lineWidth=2
+ctx.stroke()
+
+}
+
+}
+
+function drawParticles(){
+
+particles.forEach(p=>{
+
+p.x += p.vx
+p.y += p.vy
+
+if(p.x<0) p.x=canvas.width
+if(p.x>canvas.width) p.x=0
+if(p.y<0) p.y=canvas.height
+if(p.y>canvas.height) p.y=0
+
+ctx.beginPath()
+ctx.arc(p.x,p.y,p.size,0,Math.PI*2)
+ctx.fillStyle="rgba(255,255,255,0.25)"
+ctx.fill()
+
+})
+
+}
+
+function animate(){
+
+time += 0.01
+
+updateTemp()
+
+drawGradient()
+drawHeatWaves()
+drawParticles()
+
+requestAnimationFrame(animate)
+
+}
+
+animate()
 
 window.addEventListener("resize",()=>{
 
@@ -104,5 +156,6 @@ canvas.height = window.innerHeight
 })
 
 </script>
+
 </body>
 </html>
