@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Climate Field</title>
+<title>Climate Disturbance Field</title>
 
 <style>
 body{
@@ -10,6 +10,7 @@ margin:0;
 overflow:hidden;
 background:black;
 }
+
 canvas{
 display:block;
 }
@@ -30,10 +31,15 @@ canvas.width = window.innerWidth
 canvas.height = window.innerHeight
 
 let co2 = 420
-let cooling = 0
 let time = 0
 
-// fetch CO2 data
+let mouse = {
+x:canvas.width/2,
+y:canvas.height/2,
+active:false
+}
+
+// fetch climate data
 async function getClimate(){
 
 try{
@@ -43,11 +49,7 @@ let data = await res.json()
 
 co2 = parseFloat(data.co2[data.co2.length-1].trend)
 
-}catch(e){
-
-console.log("climate fetch error")
-
-}
+}catch(e){}
 
 }
 
@@ -55,14 +57,14 @@ getClimate()
 setInterval(getClimate,600000)
 
 
-// particles = atmosphere
+// particle system
 let particles=[]
 
 function createParticles(){
 
 particles=[]
 
-let count = Math.floor(co2/2)
+let count = Math.floor(co2/1.8)
 
 for(let i=0;i<count;i++){
 
@@ -70,8 +72,8 @@ particles.push({
 
 x:Math.random()*canvas.width,
 y:Math.random()*canvas.height,
-vx:(Math.random()-0.5)*1,
-vy:(Math.random()-0.5)*1,
+vx:(Math.random()-0.5)*1.2,
+vy:(Math.random()-0.5)*1.2,
 size:Math.random()*3+1
 
 })
@@ -82,72 +84,139 @@ size:Math.random()*3+1
 
 createParticles()
 
-// visitor interaction
-window.addEventListener("mousemove",()=>{
 
-cooling = 0.5
+// cursor interaction
+window.addEventListener("mousemove",(e)=>{
+
+mouse.x = e.clientX
+mouse.y = e.clientY
+mouse.active = true
 
 })
 
-// draw
-function draw(){
+window.addEventListener("touchmove",(e)=>{
 
-time += 0.01
+mouse.x = e.touches[0].clientX
+mouse.y = e.touches[0].clientY
+mouse.active = true
 
-ctx.fillStyle="rgba(0,0,0,0.08)"
-ctx.fillRect(0,0,canvas.width,canvas.height)
+})
 
-let heat = (co2/500) - cooling
 
-if(heat<0) heat=0
+// draw climate background
+function drawClimate(){
+
+let heat = co2/500
 
 let r = Math.floor(255*heat)
 let g = Math.floor(120*(1-heat))
 let b = Math.floor(255*(1-heat))
 
-let gradient = ctx.createRadialGradient(
-
+let grad = ctx.createRadialGradient(
 canvas.width/2,
 canvas.height/2,
-100,
-
+200,
 canvas.width/2,
 canvas.height/2,
 canvas.width
+)
+
+grad.addColorStop(0,`rgb(${r},${g},0)`)
+grad.addColorStop(1,`rgb(0,0,${b})`)
+
+ctx.fillStyle = grad
+ctx.fillRect(0,0,canvas.width,canvas.height)
+
+}
+
+
+// draw cooling ripple
+function drawRipple(){
+
+if(!mouse.active) return
+
+let rippleSize = 120 + Math.sin(time*4)*20
+
+let grad = ctx.createRadialGradient(
+
+mouse.x,
+mouse.y,
+0,
+
+mouse.x,
+mouse.y,
+rippleSize
 
 )
 
-gradient.addColorStop(0,`rgb(${r},${g},0)`)
-gradient.addColorStop(1,`rgb(0,0,${b})`)
+grad.addColorStop(0,"rgba(120,200,255,0.7)")
+grad.addColorStop(1,"rgba(0,0,255,0)")
 
-ctx.fillStyle=gradient
-ctx.fillRect(0,0,canvas.width,canvas.height)
+ctx.fillStyle = grad
 
-// turbulence
+ctx.beginPath()
+ctx.arc(mouse.x,mouse.y,rippleSize,0,Math.PI*2)
+ctx.fill()
+
+}
+
+
+// particles
+function updateParticles(){
+
 particles.forEach(p=>{
 
-p.x += p.vx + Math.sin(time+p.y*0.01)*0.3
-p.y += p.vy + Math.cos(time+p.x*0.01)*0.3
+// turbulence
+p.x += p.vx + Math.sin(time+p.y*0.02)*0.5
+p.y += p.vy + Math.cos(time+p.x*0.02)*0.5
 
-if(p.x<0) p.x=canvas.width
-if(p.x>canvas.width) p.x=0
-if(p.y<0) p.y=canvas.height
-if(p.y>canvas.height) p.y=0
+// cursor interaction
+let dx = p.x - mouse.x
+let dy = p.y - mouse.y
+let dist = Math.sqrt(dx*dx+dy*dy)
+
+if(dist < 150){
+
+let force = (150-dist)/150
+
+p.x += dx*force*2
+p.y += dy*force*2
+
+}
+
+// wrap edges
+if(p.x<0)p.x=canvas.width
+if(p.x>canvas.width)p.x=0
+if(p.y<0)p.y=canvas.height
+if(p.y>canvas.height)p.y=0
 
 ctx.beginPath()
 ctx.arc(p.x,p.y,p.size,0,Math.PI*2)
-ctx.fillStyle="rgba(255,255,255,0.6)"
+ctx.fillStyle="rgba(255,255,255,0.7)"
 ctx.fill()
 
 })
 
-cooling *= 0.98
+}
 
-requestAnimationFrame(draw)
+
+// animation
+function animate(){
+
+time += 0.01
+
+ctx.fillStyle="rgba(0,0,0,0.15)"
+ctx.fillRect(0,0,canvas.width,canvas.height)
+
+drawClimate()
+updateParticles()
+drawRipple()
+
+requestAnimationFrame(animate)
 
 }
 
-draw()
+animate()
 
 window.addEventListener("resize",()=>{
 
