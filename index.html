@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Climate Storm Field</title>
+<title>Climate Breathing Field</title>
 
 <style>
 body{
@@ -38,7 +38,7 @@ y:canvas.height/2,
 active:false
 }
 
-// climate data
+// fetch real CO2 data
 async function getClimate(){
 
 try{
@@ -56,23 +56,25 @@ getClimate()
 setInterval(getClimate,600000)
 
 
-// particles = atmosphere
+// particles (atmosphere)
 let particles=[]
 
 function createParticles(){
 
 particles=[]
 
-let count = Math.floor(co2*1.2)
+let count = Math.floor(co2/3)
 
 for(let i=0;i<count;i++){
 
 particles.push({
+
 x:Math.random()*canvas.width,
 y:Math.random()*canvas.height,
-vx:(Math.random()-0.5)*2,
-vy:(Math.random()-0.5)*2,
+vx:(Math.random()-0.5)*0.4,
+vy:(Math.random()-0.5)*0.4,
 size:Math.random()*2+1
+
 })
 
 }
@@ -82,40 +84,38 @@ size:Math.random()*2+1
 createParticles()
 
 
-// cursor tracking
+// cursor interaction
 window.addEventListener("mousemove",(e)=>{
+
 mouse.x = e.clientX
 mouse.y = e.clientY
 mouse.active = true
-})
 
-window.addEventListener("touchmove",(e)=>{
-mouse.x = e.touches[0].clientX
-mouse.y = e.touches[0].clientY
-mouse.active = true
 })
 
 
-// background climate heat
-function drawClimate(){
+// smooth climate gradient
+function drawGradient(){
 
 let heat = co2/500
 
-let r = Math.floor(255*heat)
-let g = Math.floor(120*(1-heat))
-let b = Math.floor(255*(1-heat))
+let warm = Math.floor(255*heat)
+let cool = Math.floor(255*(1-heat))
 
 let grad = ctx.createRadialGradient(
-canvas.width/2,
-canvas.height/2,
+
+canvas.width/2 + Math.sin(time*0.3)*200,
+canvas.height/2 + Math.cos(time*0.3)*200,
 200,
+
 canvas.width/2,
 canvas.height/2,
 canvas.width
+
 )
 
-grad.addColorStop(0,`rgb(${r},${g},0)`)
-grad.addColorStop(1,`rgb(0,0,${b})`)
+grad.addColorStop(0,`rgb(${warm},80,0)`)
+grad.addColorStop(1,`rgb(0,0,${cool})`)
 
 ctx.fillStyle = grad
 ctx.fillRect(0,0,canvas.width,canvas.height)
@@ -123,59 +123,29 @@ ctx.fillRect(0,0,canvas.width,canvas.height)
 }
 
 
-// storm waves
-function drawHeatWaves(){
-
-for(let i=0;i<6;i++){
-
-ctx.beginPath()
-
-for(let x=0;x<canvas.width;x+=20){
-
-let y =
-canvas.height/2 +
-Math.sin(x*0.01 + time*2 + i)*80 +
-i*40
-
-ctx.lineTo(x,y)
-
-}
-
-ctx.strokeStyle="rgba(255,255,255,0.05)"
-ctx.lineWidth=2
-ctx.stroke()
-
-}
-
-}
-
-
-// particles
+// particles reacting to cursor
 function updateParticles(){
 
 particles.forEach(p=>{
 
-let dx = p.x - mouse.x
-let dy = p.y - mouse.y
+// subtle drift
+p.x += p.vx + Math.sin(time+p.y*0.01)*0.2
+p.y += p.vy + Math.cos(time+p.x*0.01)*0.2
 
-let dist = Math.sqrt(dx*dx+dy*dy)
+// cursor cooling force
+let dx = mouse.x - p.x
+let dy = mouse.y - p.y
 
-// vortex interaction
+let dist = Math.sqrt(dx*dx + dy*dy)
+
 if(dist < 200){
 
-let force = (200-dist)/200
+let force = (200 - dist)/200
 
-p.vx += dx*force*0.02
-p.vy += dy*force*0.02
+p.x -= dx * force * 0.05
+p.y -= dy * force * 0.05
 
 }
-
-// storm turbulence
-p.vx += Math.sin(time + p.y*0.01)*0.05
-p.vy += Math.cos(time + p.x*0.01)*0.05
-
-p.x += p.vx
-p.y += p.vy
 
 // wrap edges
 if(p.x<0)p.x=canvas.width
@@ -185,7 +155,7 @@ if(p.y>canvas.height)p.y=0
 
 ctx.beginPath()
 ctx.arc(p.x,p.y,p.size,0,Math.PI*2)
-ctx.fillStyle="rgba(255,255,255,0.6)"
+ctx.fillStyle="rgba(255,255,255,0.5)"
 ctx.fill()
 
 })
@@ -193,12 +163,12 @@ ctx.fill()
 }
 
 
-// cooling aura
+// visible cooling aura
 function drawCursor(){
 
 if(!mouse.active) return
 
-let size = 150 + Math.sin(time*4)*30
+let radius = 140 + Math.sin(time*3)*10
 
 let grad = ctx.createRadialGradient(
 
@@ -208,17 +178,17 @@ mouse.y,
 
 mouse.x,
 mouse.y,
-size
+radius
 
 )
 
-grad.addColorStop(0,"rgba(120,220,255,0.9)")
-grad.addColorStop(1,"rgba(0,80,255,0)")
+grad.addColorStop(0,"rgba(140,220,255,0.8)")
+grad.addColorStop(1,"rgba(0,120,255,0)")
 
 ctx.fillStyle = grad
 
 ctx.beginPath()
-ctx.arc(mouse.x,mouse.y,size,0,Math.PI*2)
+ctx.arc(mouse.x,mouse.y,radius,0,Math.PI*2)
 ctx.fill()
 
 }
@@ -229,11 +199,10 @@ function animate(){
 
 time += 0.01
 
-ctx.fillStyle="rgba(0,0,0,0.15)"
+ctx.fillStyle="rgba(0,0,0,0.1)"
 ctx.fillRect(0,0,canvas.width,canvas.height)
 
-drawClimate()
-drawHeatWaves()
+drawGradient()
 updateParticles()
 drawCursor()
 
