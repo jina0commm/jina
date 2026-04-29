@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Network — Camera Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#080808;--panel:#111111;--border:#222222;--border-light:#2e2e2e;--text:#f0f0f0;--muted:#666;--accent:#ff3a50;--accent2:#2080ff;--track:#1e1e1e}
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;overflow:hidden}
+  .app{display:grid;grid-template-columns:1fr 280px;grid-template-rows:48px 1fr;height:100vh}
+  header{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:0 20px;border-bottom:1px solid var(--border);background:var(--bg);z-index:10}
+  .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:15px;letter-spacing:.08em}
+  .logo span{color:var(--accent)}
+  .tag{font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+  .canvas-wrap{position:relative;background:#000;overflow:hidden}
+  #stage{display:block;width:100%;height:100%;cursor:grab}
+  #stage:active{cursor:grabbing}
+  .hint{position:absolute;bottom:16px;left:20px;font-size:10px;color:rgba(255,255,255,.2);letter-spacing:.1em;pointer-events:none}
+  .paused-badge{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:rgba(255,58,80,.15);border:1px solid rgba(255,58,80,.4);color:var(--accent);font-size:10px;letter-spacing:.15em;padding:4px 12px;border-radius:2px;display:none;pointer-events:none}
+  .paused-badge.show{display:block}
+  .sidebar{border-left:1px solid var(--border);background:var(--panel);overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column}
+  .sidebar::-webkit-scrollbar{width:4px}
+  .sidebar::-webkit-scrollbar-thumb{background:var(--border-light);border-radius:2px}
+  .section{padding:16px 18px;border-bottom:1px solid var(--border)}
+  .section-title{font-family:'Syne',sans-serif;font-size:9px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+  .play-btn{width:100%;height:40px;background:transparent;border:1px solid var(--border-light);color:var(--text);font-family:'Syne',sans-serif;font-size:13px;font-weight:600;letter-spacing:.1em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:border-color .15s,background .15s;border-radius:2px}
+  .play-btn:hover{border-color:var(--accent);background:rgba(255,58,80,.05)}
+  .play-btn.playing{border-color:var(--accent2)}
+  .ctrl{margin-bottom:13px}
+  .ctrl:last-child{margin-bottom:0}
+  .ctrl-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .ctrl-label{font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+  .ctrl-val{font-size:11px;color:var(--text);font-weight:500;min-width:36px;text-align:right}
+  input[type=range]{-webkit-appearance:none;width:100%;height:2px;background:var(--track);border-radius:1px;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#444;border:1px solid var(--border-light);transition:background .15s,transform .1s}
+  input[type=range]:hover::-webkit-slider-thumb{background:var(--text);transform:scale(1.2)}
+  .presets-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .preset-btn{background:transparent;border:1px solid var(--border);color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.06em;padding:7px 6px;cursor:pointer;border-radius:2px;transition:border-color .15s,color .15s,background .15s;text-align:center}
+  .preset-btn:hover{border-color:var(--accent2);color:var(--text);background:rgba(32,128,255,.05)}
+  .preset-btn.active{border-color:var(--accent2);color:var(--accent2)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">NET<span>·</span>3D</div>
+    <div class="tag">Camera Explorer</div>
+  </header>
+  <div class="canvas-wrap">
+    <canvas id="stage"></canvas>
+    <div class="hint">DRAG TO ORBIT &nbsp;·&nbsp; SCROLL TO ZOOM</div>
+    <div class="paused-badge" id="pausedBadge">PAUSED</div>
+  </div>
+  <aside class="sidebar">
+    <div class="section">
+      <div class="section-title">Playback</div>
+      <button class="play-btn playing" id="pauseBtn"><span id="playIcon">⏸</span><span id="playLabel">PAUSE</span></button>
+    </div>
+    <div class="section">
+      <div class="section-title">Camera</div>
+      <div class="ctrl"><div class="ctrl-header"><span class="ctrl-label">Horizontal</span><span class="ctrl-val" id="vCamH">30°</span></div><input type="range" id="camH" min="0" max="360" step="1" value="30"></div>
+      <div class="ctrl"><div class="ctrl-header"><span class="ctrl-label">Vertical</span><span class="ctrl-val" id="vCamV">25°</span></div><input type="range" id="camV" min="-80" max="80" step="1" value="25"></div>
+      <div class="ctrl"><div class="ctrl-header"><span class="ctrl-label">Distance</span><span class="ctrl-val" id="vDist">7.0</span></div><input type="range" id="dist" min="2" max="16" step="0.1" value="7"></div>
+      <div class="ctrl"><div class="ctrl-header"><span class="ctrl-label">Field of View</span><span class="ctrl-val" id="vFov">52°</span></div><input type="range" id="fov" min="15" max="110" step="1" value="52"></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Nodes</div>
+      <div class="ctrl"><div class="ctrl-header"><span class="ctrl-label">Speed</span><span class="ctrl-val" id="vSpd">0.60</span></div><input type="range" id="spd" min="0" max="3" step="0.05" value="0.6"></div>
+      <div class="ctrl"><div class="ctrl-header"><span class="ctrl-label">Size</span><span class="ctrl-val" id="vNs">7</span></div><input type="range" id="ns" min="2" max="16" step="1" value="7"></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Strokes</div>
+      <div class="ctrl"><div class="ctrl-header"><span class="ctrl-label">Count</span><span class="ctrl-val" id="vNe">19</span></div><input type="range" id="ne" min="1" max="19" step="1" value="19"></div>
+      <div class="ctrl"><div class="ctrl-header"><span class="ctrl-label">Weight</span><span class="ctrl-val" id="vSw">18</span></div><input type="range" id="sw" min="4" max="60" step="1" value="18"></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Camera Presets</div>
+      <div class="presets-grid">
+        <button class="preset-btn active" onclick="setView(30,25,7,52,this)">Default</button>
+        <button class="preset-btn" onclick="setView(30,70,6,55,this)">Bird's Eye</button>
+        <button class="preset-btn" onclick="setView(90,10,8,48,this)">Side</button>
+        <button class="preset-btn" onclick="setView(180,20,7,52,this)">Front</button>
+        <button class="preset-btn" onclick="setView(45,38,6,52,this)">Corner</button>
+        <button class="preset-btn" onclick="setView(20,-5,9,35,this)">Low Wide</button>
+        <button class="preset-btn" onclick="setView(30,25,3.5,75,this)">Fisheye</button>
+        <button class="preset-btn" onclick="setView(30,25,14,18,this)">Telephoto</button>
+      </div>
+    </div>
+  </aside>
+</div>
+ 
+<script>
+const canvas=document.getElementById('stage');
+const ctx=canvas.getContext('2d');
+let W,H;
+function resize(){const w=canvas.parentElement;W=canvas.width=w.clientWidth;H=canvas.height=w.clientHeight;}
+resize();
+window.addEventListener('resize',()=>{resize();if(paused)draw();});
+ 
+let camH=30,camV=25,camDist=7,fovDeg=52;
+let strokeW=18,nodeSize=7,nodeSpeed=0.6,numStrokes=19;
+let drag=false,lx,ly,paused=false,rafId=null,t=0;
+ 
+// ═══════════════════════════════════════════════════════════
+// PATTERN 1: Blue/White/Red woven checker
+// Analysis: Blue large square blocks (5px), separated by 1-2px
+// alternating white/red pixel lines — like woven fabric
+// The thin lines between blue blocks alternate W/R per row & col
+// ═══════════════════════════════════════════════════════════
+function buildCheckerTile() {
+  // One period = 1 big blue block + 1 thin divider
+  const B=6, T=3; // blue block size, thin divider
+  const period = B+T;
+  const sz = period*4; // tile = 4 periods so pattern works cleanly
+  const pc=document.createElement('canvas');
+  pc.width=sz; pc.height=sz;
+  const px=pc.getContext('2d');
+ 
+  const BLUE='#1e7fc4', WHITE='#f0f0f0', RED='#cc1a1a', DKBLUE='#1a5a9e';
+ 
+  for(let y=0;y<sz;y++) {
+    for(let x=0;x<sz;x++) {
+      const cx=Math.floor(x/period); // which period column
+      const cy=Math.floor(y/period); // which period row
+      const rx=x%period; // offset within period
+      const ry=y%period;
+      const isXdiv = rx >= B; // in the thin divider column
+      const isYdiv = ry >= B; // in the thin divider row
+ 
+      let color;
+      if(!isXdiv && !isYdiv) {
+        // main blue block — slight variation for depth
+        color = (cx+cy)%2===0 ? BLUE : DKBLUE;
+      } else if(isXdiv && isYdiv) {
+        // intersection of dividers — small pixel
+        color = (cx+cy)%2===0 ? RED : WHITE;
+      } else if(isXdiv) {
+        // vertical divider line — alternates W/R per row period
+        color = cy%2===0 ? WHITE : RED;
+      } else {
+        // horizontal divider line — alternates R/W per col period
+        color = cx%2===0 ? RED : WHITE;
+      }
+      px.fillStyle=color;
+      px.fillRect(x,y,1,1);
+    }
+  }
+  return pc;
+}
+ 
+// ═══════════════════════════════════════════════════════════
+// PATTERN 2: Green/Cream grid lattice
+// Analysis from image2 (left panel):
+// - Cream/off-white background
+// - Regular square grid lines in dark green
+// - At EVERY grid intersection: a small filled green square
+// - Diagonal lines connecting each corner square — making
+//   each cell look like an octagon with a diamond inside
+// The diagonals go from corner-sq to corner-sq passing through midpoint
+// ═══════════════════════════════════════════════════════════
+function buildGridTile() {
+  const CELL=30; // full cell size
+  const SQ=7;    // size of intersection square
+  const GR='#1a6b3a', BG='#eff5e6';
+  const half=CELL/2;
+ 
+  const pc=document.createElement('canvas');
+  pc.width=CELL; pc.height=CELL;
+  const px=pc.getContext('2d');
+ 
+  // background
+  px.fillStyle=BG;
+  px.fillRect(0,0,CELL,CELL);
+ 
+  px.strokeStyle=GR;
+  px.lineWidth=1.2;
+ 
+  // Outer grid lines (borders of cell)
+  px.beginPath();
+  px.moveTo(0,0); px.lineTo(CELL,0); // top
+  px.moveTo(0,0); px.lineTo(0,CELL); // left
+  px.stroke();
+ 
+  // Diagonal lines inside cell:
+  // Top-left corner sq to top-right corner sq (via top edge)
+  // These diagonals connect corner midpoints, creating diamond/octagon look
+  // From image: diagonals go from halfway between corner-sq and edge midpoint
+  const d=SQ/2+1;
+ 
+  px.beginPath();
+  // top-left area diagonal: from (d,0) to (0,d)
+  px.moveTo(d,0); px.lineTo(0,d);
+  // top-right: from (CELL-d,0) to (CELL,d)  
+  px.moveTo(CELL-d,0); px.lineTo(CELL,d);
+  // bottom-left: from (0,CELL-d) to (d,CELL)
+  px.moveTo(0,CELL-d); px.lineTo(d,CELL);
+  // bottom-right: from (CELL,CELL-d) to (CELL-d,CELL)
+  px.moveTo(CELL,CELL-d); px.lineTo(CELL-d,CELL);
+  // Also connect corner squares to center area diagonally
+  px.moveTo(d,0); px.lineTo(half,half-d);
+  px.moveTo(CELL-d,0); px.lineTo(half,half-d);
+  px.moveTo(0,d); px.lineTo(half-d,half);
+  px.moveTo(0,CELL-d); px.lineTo(half-d,half);
+  px.moveTo(CELL,d); px.lineTo(half+d,half);
+  px.moveTo(CELL,CELL-d); px.lineTo(half+d,half);
+  px.moveTo(d,CELL); px.lineTo(half,half+d);
+  px.moveTo(CELL-d,CELL); px.lineTo(half,half+d);
+  px.stroke();
+ 
+  // Intersection square at every corner (drawn at 0,0 — repeats via tiling)
+  px.fillStyle=GR;
+  px.fillRect(-SQ/2,-SQ/2,SQ,SQ); // top-left corner
+  // also paint other corners so they show in tile
+  px.fillRect(CELL-SQ/2,-SQ/2,SQ,SQ); // top-right
+  px.fillRect(-SQ/2,CELL-SQ/2,SQ,SQ); // bottom-left
+  px.fillRect(CELL-SQ/2,CELL-SQ/2,SQ,SQ); // bottom-right
+ 
+  return pc;
+}
+ 
+// ═══════════════════════════════════════════════════════════
+// PATTERN 3: Red/Grey woven stripe
+// Analysis from image2 (right panel):
+// Wide red blocks separated by narrow grey vertical bars
+// Within each red block row, there's a lighter pink horizontal band
+// Grey bars have slightly darker shade at pink row intersection
+// Creates a clean woven/basket-weave look
+// ═══════════════════════════════════════════════════════════
+function buildStripeTile() {
+  const RW=22, GW=6;   // red block width, grey bar width
+  const RH=20, PH=5;   // red row height, pink accent row height
+  const tw=RW+GW, th=RH+PH;
+ 
+  const pc=document.createElement('canvas');
+  pc.width=tw; pc.height=th;
+  const px=pc.getContext('2d');
+ 
+  // main red block
+  px.fillStyle='#cc1a1a';
+  px.fillRect(0,0,RW,RH);
+ 
+  // lighter pink/salmon accent row
+  px.fillStyle='#dd5555';
+  px.fillRect(0,RH,RW,PH);
+ 
+  // grey vertical bar
+  px.fillStyle='#7a7a7a';
+  px.fillRect(RW,0,GW,RH);
+ 
+  // darker bar-row intersection
+  px.fillStyle='#555555';
+  px.fillRect(RW,RH,GW,PH);
+ 
+  return pc;
+}
+ 
+// ═══════════════════════════════════════════════════════════
+// Stroke rendering — clips + rotates to follow stroke direction
+// ═══════════════════════════════════════════════════════════
+let tiles={};
+function initPatterns(){
+  tiles.checker=buildCheckerTile();
+  tiles.grid=buildGridTile();
+  tiles.stripe=buildStripeTile();
+}
+ 
+function drawPatternStroke(tile,x1,y1,x2,y2,weight){
+  const dx=x2-x1,dy=y2-y1;
+  const len=Math.sqrt(dx*dx+dy*dy);
+  if(len<1)return;
+  const angle=Math.atan2(dy,dx);
+  const mx=(x1+x2)/2,my=(y1+y2)/2;
+  const hl=len/2,r=weight/2;
+ 
+  ctx.save();
+  ctx.translate(mx,my);
+  ctx.rotate(angle);
+ 
+  // rounded-rect clip
+  ctx.beginPath();
+  ctx.moveTo(-hl+r,-r);
+  ctx.arcTo(hl,-r, hl,r, r);
+  ctx.arcTo(hl,r, -hl,r, r);
+  ctx.arcTo(-hl,r, -hl,-r, r);
+  ctx.arcTo(-hl,-r, -hl+r,-r, r);
+  ctx.closePath();
+  ctx.clip();
+ 
+  // pattern aligned to stroke direction
+  const pat=ctx.createPattern(tile,'repeat');
+  const mat=new DOMMatrix();
+  mat.translateSelf(-hl,-r);
+  pat.setTransform(mat);
+  ctx.fillStyle=pat;
+  ctx.fillRect(-hl-tile.width,-r-tile.height,len+tile.width*2,weight+tile.height*2);
+ 
+  ctx.restore();
+}
+ 
+function drawGradStroke(c1,c2,x1,y1,x2,y2,w){
+  const g=ctx.createLinearGradient(x1,y1,x2,y2);
+  g.addColorStop(0,c1);g.addColorStop(1,c2);
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);
+  ctx.lineWidth=w;ctx.lineCap='round';ctx.strokeStyle=g;ctx.stroke();
+}
+ 
+function drawSolidStroke(col,x1,y1,x2,y2,w){
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);
+  ctx.lineWidth=w;ctx.lineCap='round';ctx.strokeStyle=col;ctx.stroke();
+}
+ 
+function renderEdge(si,x1,y1,x2,y2,w){
+  const s=si%7;
+  if(s===0) drawPatternStroke(tiles.checker,x1,y1,x2,y2,w);
+  else if(s===1) drawPatternStroke(tiles.grid,x1,y1,x2,y2,w);
+  else if(s===2) drawPatternStroke(tiles.stripe,x1,y1,x2,y2,w);
+  else if(s===3) drawGradStroke('#1a8c4e','#7de8a0',x1,y1,x2,y2,w);
+  else if(s===4) drawGradStroke('#4a6fa5','#e05030',x1,y1,x2,y2,w);
+  else if(s===5) drawSolidStroke('#4a90d9',x1,y1,x2,y2,w);
+  else           drawGradStroke('#e86060','#e88040',x1,y1,x2,y2,w);
+}
+ 
+// ═══════════════════════════════════════════════════════════
+// Controls
+// ═══════════════════════════════════════════════════════════
+const pauseBtn=document.getElementById('pauseBtn');
+pauseBtn.addEventListener('click',()=>{
+  paused=!paused;
+  document.getElementById('playIcon').textContent=paused?'▶':'⏸';
+  document.getElementById('playLabel').textContent=paused?'PLAY':'PAUSE';
+  pauseBtn.classList.toggle('playing',!paused);
+  document.getElementById('pausedBadge').classList.toggle('show',paused);
+  if(!paused){if(rafId)cancelAnimationFrame(rafId);rafId=requestAnimationFrame(loop);}
+});
+ 
+function setView(h,v,d,f,btn){
+  camH=h;camV=v;camDist=d;fovDeg=f;
+  document.getElementById('camH').value=h;
+  document.getElementById('camV').value=v;
+  document.getElementById('dist').value=d;
+  document.getElementById('fov').value=f;
+  document.getElementById('vCamH').textContent=h+'°';
+  document.getElementById('vCamV').textContent=v+'°';
+  document.getElementById('vDist').textContent=(+d).toFixed(1);
+  document.getElementById('vFov').textContent=f+'°';
+  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  if(paused)draw();
+}
+ 
+const bindings={
+  camH:v=>{camH=v;document.getElementById('vCamH').textContent=v+'°';},
+  camV:v=>{camV=v;document.getElementById('vCamV').textContent=v+'°';},
+  dist:v=>{camDist=v;document.getElementById('vDist').textContent=(+v).toFixed(1);},
+  fov: v=>{fovDeg=v;document.getElementById('vFov').textContent=v+'°';},
+  spd: v=>{nodeSpeed=v;document.getElementById('vSpd').textContent=(+v).toFixed(2);},
+  ne:  v=>{numStrokes=v;document.getElementById('vNe').textContent=v;},
+  sw:  v=>{strokeW=v;document.getElementById('vSw').textContent=v;},
+  ns:  v=>{nodeSize=v;document.getElementById('vNs').textContent=v;},
+};
+Object.keys(bindings).forEach(id=>{
+  document.getElementById(id).addEventListener('input',function(){
+    bindings[id](+this.value);
+    document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+    if(paused)draw();
+  });
+});
+ 
+canvas.addEventListener('mousedown',e=>{drag=true;lx=e.clientX;ly=e.clientY;});
+canvas.addEventListener('mousemove',e=>{
+  if(!drag)return;
+  camH=(camH-(e.clientX-lx)*0.4+360)%360;
+  camV=Math.max(-80,Math.min(80,camV+(e.clientY-ly)*0.3));
+  lx=e.clientX;ly=e.clientY;
+  document.getElementById('camH').value=Math.round(camH);
+  document.getElementById('vCamH').textContent=Math.round(camH)+'°';
+  document.getElementById('camV').value=Math.round(camV);
+  document.getElementById('vCamV').textContent=Math.round(camV)+'°';
+  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+  if(paused)draw();
+});
+canvas.addEventListener('mouseup',()=>drag=false);
+canvas.addEventListener('mouseleave',()=>drag=false);
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  camDist=Math.max(2,Math.min(16,camDist+e.deltaY*0.015));
+  document.getElementById('dist').value=camDist.toFixed(1);
+  document.getElementById('vDist').textContent=camDist.toFixed(1);
+  if(paused)draw();
+},{passive:false});
+canvas.addEventListener('touchstart',e=>{drag=true;lx=e.touches[0].clientX;ly=e.touches[0].clientY;},{passive:true});
+canvas.addEventListener('touchmove',e=>{
+  if(!drag)return;
+  camH=(camH-(e.touches[0].clientX-lx)*0.5+360)%360;
+  camV=Math.max(-80,Math.min(80,camV+(e.touches[0].clientY-ly)*0.35));
+  lx=e.touches[0].clientX;ly=e.touches[0].clientY;
+  if(paused)draw();
+},{passive:true});
+canvas.addEventListener('touchend',()=>drag=false);
+ 
+// ═══════════════════════════════════════════════════════════
+// Nodes & Edges
+// ═══════════════════════════════════════════════════════════
+const BOUND=2.0;
+const nodes=Array.from({length:10},()=>({
+  x:0,y:0,z:0,
+  ox:Math.random()*Math.PI*2,oy:Math.random()*Math.PI*2,oz:Math.random()*Math.PI*2,
+  fx:Math.random()*0.3+0.2,  fy:Math.random()*0.3+0.2,  fz:Math.random()*0.3+0.2,
+  ax:Math.random()*0.6+0.4,  ay:Math.random()*0.6+0.4,  az:Math.random()*0.6+0.4,
+  bx:(Math.random()-0.5)*BOUND*2,
+  by:(Math.random()-0.5)*BOUND*2,
+  bz:(Math.random()-0.5)*BOUND*2,
+}));
+ 
+const allEdges=[];
+for(let i=0;i<10;i++)
+  for(let j=i+1;j<10;j++)
+    allEdges.push({a:i,b:j,styleIdx:allEdges.length%7});
+ 
+// ═══════════════════════════════════════════════════════════
+// Projection
+// ═══════════════════════════════════════════════════════════
+function project(wx,wy,wz){
+  const hR=camH*Math.PI/180,vR=camV*Math.PI/180;
+  const camX=camDist*Math.cos(vR)*Math.sin(hR);
+  const camY=camDist*Math.cos(vR)*Math.cos(hR);
+  const camZ=camDist*Math.sin(vR);
+  const dx=wx-camX,dy=wy-camY,dz=wz-camZ;
+  const fl=camDist;
+  const fx=-camX/fl,fy=-camY/fl,fz=-camZ/fl;
+  let rx,ry,rz;
+  if(Math.abs(fz)>0.999){rx=1;ry=0;rz=0;}
+  else{const rL=Math.sqrt(fx*fx+fy*fy);rx=fy/rL;ry=-fx/rL;rz=0;}
+  const ux=ry*fz-rz*fy,uy=rz*fx-rx*fz,uz=rx*fy-ry*fx;
+  const csX=dx*rx+dy*ry+dz*rz;
+  const csY=dx*ux+dy*uy+dz*uz;
+  const csZ=dx*fx+dy*fy+dz*fz;
+  if(csZ<=0.1)return[null,null,null];
+  const focalLen=1/Math.tan(fovDeg*Math.PI/360);
+  return[W/2+(csX/csZ)*focalLen*(H/2),H/2-(csY/csZ)*focalLen*(H/2),csZ];
+}
+ 
+function updateNodes(){
+  nodes.forEach(n=>{
+    n.x=n.bx+Math.sin(t*n.fx*nodeSpeed+n.ox)*n.ax;
+    n.y=n.by+Math.sin(t*n.fy*nodeSpeed+n.oy)*n.ay;
+    n.z=n.bz+Math.sin(t*n.fz*nodeSpeed+n.oz)*n.az;
+  });
+}
+ 
+// ═══════════════════════════════════════════════════════════
+// Draw
+// ═══════════════════════════════════════════════════════════
+function draw(){
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,W,H);
+  const pts=nodes.map(n=>project(n.x,n.y,n.z));
+  allEdges.slice(0,numStrokes)
+    .map(e=>{
+      const pa=pts[e.a],pb=pts[e.b];
+      if(!pa[0]||!pb[0])return null;
+      return{...e,pa,pb,avgD:(pa[2]+pb[2])/2};
+    })
+    .filter(Boolean)
+    .sort((a,b)=>b.avgD-a.avgD)
+    .forEach(e=>renderEdge(e.styleIdx,e.pa[0],e.pa[1],e.pb[0],e.pb[1],strokeW));
+ 
+  pts.map((pt,i)=>({pt,i}))
+    .filter(o=>o.pt[0]!==null)
+    .sort((a,b)=>b.pt[2]-a.pt[2])
+    .forEach(({pt})=>{
+      ctx.beginPath();
+      ctx.arc(pt[0],pt[1],nodeSize,0,Math.PI*2);
+      ctx.strokeStyle='rgba(255,255,255,0.6)';
+      ctx.lineWidth=1.5;
+      ctx.stroke();
+      ctx.fillStyle='rgba(0,0,0,0.4)';
+      ctx.fill();
+    });
+}
+ 
+function loop(){
+  if(paused)return;
+  t+=0.01;
+  updateNodes();
+  draw();
+  rafId=requestAnimationFrame(loop);
+}
+ 
+initPatterns();
+updateNodes();
+draw();
+rafId=requestAnimationFrame(loop);
+</script>
+</body>
+</html>
